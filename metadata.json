@@ -1,0 +1,6 @@
+{
+  "name": "Landing Page Builder Powered by AI",
+  "description": "Generate modern landing pages using natural language prompts or company profile PDFs via the Gemini API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

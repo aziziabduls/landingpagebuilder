@@ -200,6 +200,7 @@ export default function App() {
   const [fileBase64, setFileBase64] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
+  const [streamingCode, setStreamingCode] = useState('');
   const [activeTab, setActiveTab] = useState('preview');
   const [selectedElement, setSelectedElement] = useState<any>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -209,6 +210,7 @@ export default function App() {
   const handleAbort = () => {
     generateIdRef.current++;
     setIsGenerating(false);
+    setStreamingCode('');
   };
   const [mediaFiles, setMediaFiles] = useState<{ [key: string]: File }>({});
   const [blobToFileName, setBlobToFileName] = useState<{ [key: string]: string }>({});
@@ -527,6 +529,7 @@ export default function App() {
 
     setIsGenerating(true);
     setGeneratedHtml(null);
+    setStreamingCode('');
     setGenerationError(null);
     setActiveTab('preview');
 
@@ -570,7 +573,9 @@ export default function App() {
         });
         for await (const chunk of responseStream.stream) {
           if (currentId !== generateIdRef.current) return;
-          html += chunk.text();
+          const text = chunk.text();
+          html += text;
+          setStreamingCode(html);
         }
       } else if (activeProvider === 'openai') {
         const activeApiKey = sessionStorage.getItem('openai_api_key') || localStorage.getItem('openai_api_key');
@@ -723,6 +728,7 @@ export default function App() {
     } finally {
       if (currentId === generateIdRef.current) {
         setIsGenerating(false);
+        setStreamingCode('');
       }
     }
   };

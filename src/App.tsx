@@ -246,7 +246,7 @@ export default function App() {
 
   // Model & Provider States
   const [provider, setProvider] = useState<'gemini' | 'openai' | 'anthropic'>('gemini');
-  const [selectedModel, setSelectedModel] = useState('gemini-3.1-pro-preview');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash');
   const [geminiKeyInput, setGeminiKeyInput] = useState('');
   const [openaiKeyInput, setOpenaiKeyInput] = useState('');
   const [anthropicKeyInput, setAnthropicKeyInput] = useState('');
@@ -272,7 +272,7 @@ export default function App() {
     const storage = isLocal ? localStorage : sessionStorage;
 
     const savedProvider = (storage.getItem('ai_provider') as 'gemini' | 'openai' | 'anthropic') || 'gemini';
-    const savedModel = storage.getItem('ai_model') || 'gemini-3.1-pro';
+    const savedModel = storage.getItem('ai_model') || 'gemini-3.8-flash';
     const savedGemini = storage.getItem('gemini_api_key') || '';
     const savedOpenai = storage.getItem('openai_api_key') || '';
     const savedAnthropic = storage.getItem('anthropic_api_key') || '';
@@ -286,7 +286,7 @@ export default function App() {
 
   const handleProviderChange = (newProvider: 'gemini' | 'openai' | 'anthropic') => {
     setProvider(newProvider);
-    if (newProvider === 'gemini') setSelectedModel('gemini-3.1-pro-preview');
+    if (newProvider === 'gemini') setSelectedModel('gemini-3.8-flash');
     else if (newProvider === 'openai') setSelectedModel('gpt-5.6-sol');
     else if (newProvider === 'anthropic') setSelectedModel('claude-fable-5');
   };
@@ -296,7 +296,7 @@ export default function App() {
     const storage = saveLocation === 'local' ? localStorage : sessionStorage;
     storage.setItem('ai_provider', newProvider);
 
-    let newModel = 'gemini-3.1-pro-preview';
+    let newModel = 'gemini-3.8-flash';
     if (newProvider === 'openai') newModel = 'gpt-5.6-sol';
     else if (newProvider === 'anthropic') newModel = 'claude-fable-5';
     storage.setItem('ai_model', newModel);
@@ -528,6 +528,7 @@ export default function App() {
     setIsGenerating(true);
     setGeneratedHtml(null);
     setGenerationError(null);
+    setActiveTab('preview');
 
     try {
       const parts: any[] = [];
@@ -550,7 +551,7 @@ export default function App() {
 
       let html = '';
       const activeProvider = sessionStorage.getItem('ai_provider') || localStorage.getItem('ai_provider') || 'gemini';
-      const activeModel = sessionStorage.getItem('ai_model') || localStorage.getItem('ai_model') || 'gemini-3.1-pro-preview';
+      const activeModel = sessionStorage.getItem('ai_model') || localStorage.getItem('ai_model') || 'gemini-3.8-flash';
 
       if (activeProvider === 'gemini') {
         const activeApiKey = sessionStorage.getItem('gemini_api_key') || localStorage.getItem('gemini_api_key');
@@ -561,13 +562,16 @@ export default function App() {
           systemInstruction: SYSTEM_PROMPT,
         });
 
-        const response = await model.generateContent({
+        const responseStream = await model.generateContentStream({
           contents: [{ role: 'user', parts }],
           generationConfig: {
             temperature: 0.7,
           }
         });
-        html = response.response.text() || '';
+        for await (const chunk of responseStream.stream) {
+          if (currentId !== generateIdRef.current) return;
+          html += chunk.text();
+        }
       } else if (activeProvider === 'openai') {
         const activeApiKey = sessionStorage.getItem('openai_api_key') || localStorage.getItem('openai_api_key');
         if (!activeApiKey) {
@@ -1180,7 +1184,7 @@ export default function App() {
           </DrawerContent>
         </Drawer>
 
-        {!generatedHtml && (
+        {!generatedHtml && !isGenerating && (
           <div className="flex-1 flex items-center justify-center relative overflow-hidden p-6">
             {/* Background WebThreads animation */}
             <div className="absolute inset-0 z-0 opacity-40 dark:opacity-40 pointer-events-none">
@@ -1216,7 +1220,7 @@ export default function App() {
         )}
 
         {/* Main Content Area */}
-        {generatedHtml && (
+        {(generatedHtml || isGenerating) && (
           <div id="preview-window" className={cn('flex-1 flex flex-col min-w-0 p-6 overscroll-contain overflow-hidden scroll-mt-20 transition-colors duration-500', themeStyles.panel)}>
             <Tabs value={activeTab} onValueChange={setActiveTab} className={cn('flex-1 flex flex-col h-full backdrop-blur-sm rounded-2xl shadow-sm overflow-hidden', themeStyles.card)}>
               <div className={cn('flex items-center justify-between px-4 py-3 border-b', themeStyles.tabHeader)}>
@@ -1231,73 +1235,84 @@ export default function App() {
                   </TabsTrigger>
                 </TabsList>
 
-                {generatedHtml && (
-                  <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  {isGenerating && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAbort}
+                      className="rounded-full text-xs font-medium h-8 px-4 flex items-center gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Abort Generation
+                    </Button>
+                  )}
 
-                    {/* create on this */}
+                  {generatedHtml && !isGenerating && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant={isPromptVisible ? "secondary" : "outline"}
+                        size="sm"
+                        onClick={() => setIsPromptVisible(!isPromptVisible)}
+                        className="rounded-full text-xs font-medium h-8 px-4 flex items-center gap-2"
+                      >
+                        {isPromptVisible ? <IconChevronDown className="w-3.5 h-3.5" /> : <IconChevronUp className="w-3.5 h-3.5" />}
+                        {isPromptVisible ? 'Hide Prompt' : 'Show Prompt'}
+                      </Button>
 
-                    <Button
-                      variant={isPromptVisible ? "secondary" : "outline"}
-                      size="sm"
-                      onClick={() => setIsPromptVisible(!isPromptVisible)}
-                      className="rounded-full text-xs font-medium h-8 px-4 flex items-center gap-2"
-                    >
-                      {isPromptVisible ? <IconChevronDown className="w-3.5 h-3.5" /> : <IconChevronUp className="w-3.5 h-3.5" />}
-                      {isPromptVisible ? 'Hide Prompt' : 'Show Prompt'}
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setGeneratedHtml(null);
-                        setPrompt('');
-                        setFile(null);
-                        setFileBase64(null);
-                        setIsDrawerOpen(false);
-                        setSelectedElement(null);
-                        setEditForm({});
-                      }}
-                      className="rounded-full text-xs font-medium h-8 px-4 flex items-center gap-2"
-                    >
-                      <IconReload className="w-3.5 h-3.5" />
-                      Reset & Start New
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleZipExport}
-                      className="rounded-full text-xs font-medium h-8 px-4 flex items-center gap-2"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Export .zip
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDownloadCode}
-                      className="rounded-full text-xs font-medium h-8 px-4"
-                    >
-                      Export HTML
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const win = window.open();
-                        if (win && generatedHtml) {
-                          // Clean up the bridge script for preview window as well
-                          const finalHtml = generatedHtml.replace(/<!-- AI_EDIT_BRIDGE_START -->[\s\S]*?<!-- AI_EDIT_BRIDGE_END -->/, '');
-                          win.document.write(finalHtml);
-                          win.document.close();
-                        }
-                      }}
-                      className="rounded-full text-xs font-medium h-8 px-4"
-                    >
-                      Preview
-                    </Button>
-                  </div>
-                )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setGeneratedHtml(null);
+                          setPrompt('');
+                          setFile(null);
+                          setFileBase64(null);
+                          setIsDrawerOpen(false);
+                          setSelectedElement(null);
+                          setEditForm({});
+                        }}
+                        className="rounded-full text-xs font-medium h-8 px-4 flex items-center gap-2"
+                      >
+                        <IconReload className="w-3.5 h-3.5" />
+                        Reset & Start New
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleZipExport}
+                        className="rounded-full text-xs font-medium h-8 px-4 flex items-center gap-2"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Export .zip
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDownloadCode}
+                        className="rounded-full text-xs font-medium h-8 px-4"
+                      >
+                        Export HTML
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const win = window.open();
+                          if (win && generatedHtml) {
+                            // Clean up the bridge script for preview window as well
+                            const finalHtml = generatedHtml.replace(/<!-- AI_EDIT_BRIDGE_START -->[\s\S]*?<!-- AI_EDIT_BRIDGE_END -->/, '');
+                            win.document.write(finalHtml);
+                            win.document.close();
+                          }
+                        }}
+                        className="rounded-full text-xs font-medium h-8 px-4"
+                      >
+                        Preview
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className={cn('flex-1 relative h-full transition-colors duration-300', themeStyles.panel)}>

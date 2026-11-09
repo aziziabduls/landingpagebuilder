@@ -206,9 +206,14 @@ export default function App() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
   const generateIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleAbort = () => {
     generateIdRef.current++;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setIsGenerating(false);
     setStreamingCode('');
   };
@@ -533,6 +538,9 @@ export default function App() {
     setGenerationError(null);
     setActiveTab('preview');
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const parts: any[] = [];
 
@@ -618,6 +626,7 @@ export default function App() {
 
         const apiResponse = await fetch('/api-proxy/openai/v1/chat/completions', {
           method: 'POST',
+          signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${activeApiKey}`
@@ -676,6 +685,7 @@ export default function App() {
 
         const apiResponse = await fetch('/api-proxy/anthropic/v1/messages', {
           method: 'POST',
+          signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             'x-api-key': activeApiKey,
